@@ -1,5 +1,5 @@
 # Virtual environments
-venv/
+.venv/
 
 # Compiled Python files
 __pycache__/
@@ -22,3 +22,6 @@ tmp/
 # Sensitive information (example)
 .env
 config.ini
+
+# UV Specific
+.python-version

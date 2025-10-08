@@ -14,6 +14,8 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
 # Import enviromental variables
 load_dotenv()
@@ -29,7 +31,7 @@ MODEL_NAME = "claude-sonnet-4-20250514"
 MAX_ITERATIONS = 10
 
 # ============================================================================
-# Pydancit Models for Structured Data
+# Pydantic Models for Structured Data
 # ============================================================================
 
 
@@ -341,3 +343,72 @@ def run_agent(user_message: str) -> str:
             return f"Unexpected stop reason: {response.stop_reason}"
 
     return "Maximum iterations reached. Please try again with a more specific query"
+
+
+# ============================================================================
+# Main Application
+# ============================================================================
+
+
+def print_welcome():
+    """Display welcome message"""
+    welcome_text = """
+    # AI Weather Agent
+
+    Hello!  I am an intelligent weather assistant powered by Claude.
+
+    **What I can do:**
+    - Get current weather conditions for any city
+    - Provide weather forecasts (5 days Max)
+    - Answer questions about the weather
+    - Support for both Celsuis and Fahrenheit
+
+    **Example Queries:**
+    - "What's the weather like in Paris?"
+    - "Will it rain in Tokyo tomorrow?"
+    - "What should I pack for my trip to Londan in three days?"
+
+    **Commands**
+    - Type 'quit', 'exit' or 'bye' to leave
+    - Use natural language, I can figure it out!
+
+    *Powered by Claude and OpenWeatherMap*
+    """
+    console.print(Panel(Markdown(welcome_text), border_style="blue"))
+
+
+def main():
+    # TODO add API Checks
+
+    print_welcome()
+
+    while True:
+        try:
+            console.print("\n[bold cyan]You:[/bold cyan]", end=" ")
+            user_input = input.strip()
+
+            if user_input.lower() in ["quit", "exit", "bye", "goodbye"]:
+                console.print(
+                    "\n[bold green]Goodbye! Enjoy the weather![/bold green]\n"
+                )
+                break
+
+            # TODO Should I remind the user to type?
+            if not user_input:
+                continue
+
+            console.print("\n[bold yellow]Assistant:[/bold yellow]")
+            response = run_agent(user_input)
+            console.print(f"[white]{response}[/white]")
+
+        except KeyboardInterrupt:
+            console.print("\n\n[bold red] Interrupted. Goodbye[/bold red]\n")
+            break
+
+        except Exception as e:
+            console.print(f"\n[bold red] Error: {e}[/bold red]")
+            continue
+
+
+if __name__ == "__main__":
+    main()

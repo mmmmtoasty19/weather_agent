@@ -5,17 +5,14 @@ Uses Claude API with tool calling
 """
 
 import os
-import json
-import time
-from typing import Literal, Optional, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Any
+
 import requests
 from anthropic import Anthropic
-from rich.console import Console
-from rich.panel import Panel
-from rich.markdown import Markdown
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from rich.console import Console
 
 # Import enviromental variables
 load_dotenv()
@@ -34,8 +31,10 @@ MAX_ITERATIONS = 10
 # Pydancit Models for Structured Data
 # ============================================================================
 
+
 class WeatherData(BaseModel):
     """Model for weather data response"""
+
     location: str = Field(description="City name")
     country: str = Field(description="Country code")
     temperature: float = Field(description="Current temperature")
@@ -53,6 +52,7 @@ class WeatherData(BaseModel):
     sunset: str = Field(description="Sunset time")
     units: str = Field(description="Temperature units (metric/imperial)")
     timestamp: str = Field(description="Data timestamp")
+
 
 class ForecastItem(BaseModel):
     """Single forecast item"""
@@ -76,31 +76,30 @@ class ToolResult(BaseModel):
     """Result from tool execution"""
 
     success: bool = Field(description="Whether tool execution succeeded")
-    data: Optional[Any] = Field(default=None, description="Tool output data")
-    error: Optional[str] = Field(default=None, description="Error message if failed")
+    data: Any | None = Field(default=None, description="Tool output data")
+    error: str | None = Field(default=None, description="Error message if failed")
+
 
 # ============================================================================
 # Weather API Tools
 # ============================================================================
 
-def get_current_weather(location: str, units: str="metric") -> ToolResult:
+
+def get_current_weather(location: str, units: str = "metric") -> ToolResult:
     """
     Fetch current weather data for a location using OpenWeatherMap API.
 
     Args:
         location (str): City name.
         units (str): Units for temperature ('metric' or 'imperial').
-    
+
     Returns:
         ToolResult: Result containing weather data or error message.
     """
     try:
-
         location = location.strip()
 
-        console.print(
-            f"[cyan] Fetching current weather for {location}...[/cyan]"
-        )
+        console.print(f"[cyan] Fetching current weather for {location}...[/cyan]")
         url = f"{WEATHER_API_URL}/weather"
         params = {"q": location, "appid": WEATHER_API_KEY, "units": units}
 
@@ -133,7 +132,6 @@ def get_current_weather(location: str, units: str="metric") -> ToolResult:
 
         return ToolResult(success=True, data=weather_data.model_dump())
 
-
     except requests.exceptions.RequestException as e:
         error_msg = f"Failed to fetch weather data: {str(e)}"
         console.print(f"[red] {error_msg}[/red]")
@@ -143,24 +141,22 @@ def get_current_weather(location: str, units: str="metric") -> ToolResult:
         console.print(f"[red] {error_msg}[/red]")
         return ToolResult(success=False, error=error_msg)
 
-def get_weather_forcast(location: str, units: str="metric") -> ToolResult:
+
+def get_weather_forcast(location: str, units: str = "metric") -> ToolResult:
     """
     Fetch 5-day weather forcast a location using OpenWeatherMap API.
 
     Args:
         location (str): City name.
         units (str): Units for temperature ('metric' or 'imperial').
-    
+
     Returns:
         ToolResult: Result containing weather data or error message.
     """
     try:
-
         location = location.strip()
 
-        console.print(
-            f"[cyan] Fetching forcast for {location}...[/cyan]"
-        )
+        console.print(f"[cyan] Fetching forcast for {location}...[/cyan]")
         url = f"{WEATHER_API_URL}/forecast"
         params = {"q": location, "appid": WEATHER_API_KEY, "units": units}
 
@@ -185,12 +181,11 @@ def get_weather_forcast(location: str, units: str="metric") -> ToolResult:
             location=data["city"]["name"],
             country=data["city"]["country"],
             forecasts=forecasts,
-        )   
+        )
 
         console.print("[green] Forecast data retrieved successfully[/green]")
 
         return ToolResult(success=True, data=forecast_data.model_dump())
-
 
     except requests.exceptions.RequestException as e:
         error_msg = f"Failed to fetch weather data: {str(e)}"
@@ -200,3 +195,59 @@ def get_weather_forcast(location: str, units: str="metric") -> ToolResult:
         error_msg = f"Unexpected error: {str(e)}"
         console.print(f"[red] {error_msg}[/red]")
         return ToolResult(success=False, error=error_msg)
+
+
+# ============================================================================
+# Tool Definitions for Claude
+# ============================================================================
+
+TOOLS = [
+    {
+        "name": "get_current_weather",
+        "description": (
+            "Fetches current weather data for a specified location. "
+            "Use this when the user asks about current weather conditions, "
+            "temperature, humidity, wind, or any present-moment weather information. "
+            "Supports precise locations using 'city,state,country' "
+            "format for small towns."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": 'Location in one of these formats: "City", "City,Country", or "City,State,Country". Examples: "London", "Paris,FR", "Austin,TX,US", "Bladenboro,NC,US". For small towns, use the full "City,State,Country" format for best results. Use ISO 3166 country codes (US, GB, FR, etc.) and standard 2-letter state codes (TX, CA, NC, etc.)',
+                },
+                "units": {
+                    "type": "string",
+                    "enum": ["metric", "imperial"],
+                    "description": 'Temperature units: "metric" for Celsius, "imperial" for Fahrenheit. Default is metric.',
+                    "default": "metric",
+                },
+            },
+            "required": ["location"],
+        },
+    },
+    {
+        "name": "get_weather_forecast",
+        "description": "Fetches weather forecast data (next 24 hours in 3-hour intervals) for a specified location. Use this when the user asks about future weather, forecasts, upcoming conditions, or what the weather will be like. Supports precise locations using 'city,state,country' format for small towns.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": 'Location in one of these formats: "City", "City,Country", or "City,State,Country". Examples: "London", "Paris,FR", "Austin,TX,US", "Bladenboro,NC,US". For small towns, use the full "City,State,Country" format for best results. Use ISO 3166 country codes (US, GB, FR, etc.) and standard 2-letter state codes (TX, CA, NC, etc.)',
+                },
+                "units": {
+                    "type": "string",
+                    "enum": ["metric", "imperial"],
+                    "description": 'Temperature units: "metric" for Celsius, "imperial" for Fahrenheit. Default is metric.',
+                    "default": "metric",
+                },
+            },
+            "required": ["location"],
+        },
+    },
+]
+
+TOOL_MAP = {}

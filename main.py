@@ -143,3 +143,60 @@ def get_current_weather(location: str, units: str="metric") -> ToolResult:
         console.print(f"[red] {error_msg}[/red]")
         return ToolResult(success=False, error=error_msg)
 
+def get_weather_forcast(location: str, units: str="metric") -> ToolResult:
+    """
+    Fetch 5-day weather forcast a location using OpenWeatherMap API.
+
+    Args:
+        location (str): City name.
+        units (str): Units for temperature ('metric' or 'imperial').
+    
+    Returns:
+        ToolResult: Result containing weather data or error message.
+    """
+    try:
+
+        location = location.strip()
+
+        console.print(
+            f"[cyan] Fetching forcast for {location}...[/cyan]"
+        )
+        url = f"{WEATHER_API_URL}/forecast"
+        params = {"q": location, "appid": WEATHER_API_KEY, "units": units}
+
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        forecasts = []
+        for item in data["list"][:8]:
+            forecasts.append(
+                ForecastItem(
+                    datetime=item["dt_txt"],
+                    temperature=item["main"]["temp"],
+                    description=item["weather"][0]["description"],
+                    wind_speed=item["wind"]["speed"],
+                    humidity=item["main"]["humidity"],
+                )
+            )
+
+        forecast_data = ForecastData(
+            location=data["city"]["name"],
+            country=data["city"]["country"],
+            forecasts=forecasts,
+        )   
+
+        console.print("[green] Forecast data retrieved successfully[/green]")
+
+        return ToolResult(success=True, data=forecast_data.model_dump())
+
+
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Failed to fetch weather data: {str(e)}"
+        console.print(f"[red] {error_msg}[/red]")
+        return ToolResult(success=False, error=error_msg)
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        console.print(f"[red] {error_msg}[/red]")
+        return ToolResult(success=False, error=error_msg)

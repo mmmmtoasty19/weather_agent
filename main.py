@@ -4,6 +4,7 @@ Inspired by Dave Ebbelaar's single file AI agents
 Uses Claude API with tool calling
 """
 
+import json
 import os
 from datetime import datetime
 from typing import Any
@@ -142,7 +143,7 @@ def get_current_weather(location: str, units: str = "metric") -> ToolResult:
         return ToolResult(success=False, error=error_msg)
 
 
-def get_weather_forcast(location: str, units: str = "metric") -> ToolResult:
+def get_weather_forecast(location: str, units: str = "metric") -> ToolResult:
     """
     Fetch 5-day weather forcast a location using OpenWeatherMap API.
 
@@ -166,7 +167,7 @@ def get_weather_forcast(location: str, units: str = "metric") -> ToolResult:
         data = response.json()
 
         forecasts = []
-        for item in data["list"][:8]:
+        for item in data["list"][:40]:
             forecasts.append(
                 ForecastItem(
                     datetime=item["dt_txt"],
@@ -230,7 +231,7 @@ TOOLS = [
     },
     {
         "name": "get_weather_forecast",
-        "description": "Fetches weather forecast data (next 24 hours in 3-hour intervals) for a specified location. Use this when the user asks about future weather, forecasts, upcoming conditions, or what the weather will be like. Supports precise locations using 'city,state,country' format for small towns.",
+        "description": "Fetches weather forecast data (next 5 days in 3-hour intervals) for a specified location. Use this when the user asks about future weather, forecasts, upcoming conditions, or what the weather will be like. Supports precise locations using 'city,state,country' format for small towns.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -250,4 +251,93 @@ TOOLS = [
     },
 ]
 
-TOOL_MAP = {}
+TOOL_MAP = {
+    "get_current_weather": get_current_weather,
+    "get_weather_forecast": get_weather_forecast,
+}
+
+# ============================================================================
+# Agent Loop
+# ============================================================================
+
+
+def process_tool_call(tool_name: str, tool_input: dict) -> ToolResult:
+    """Execute a tool and return the result"""
+    if tool_name not in TOOL_MAP:
+        return ToolResult(sucess=False, error=f"Unkown tool: {tool_name}")
+
+    tool_func = TOOL_MAP[tool_name]
+    return tool_func(**tool_input)
+
+
+def run_agent(user_message: str) -> str:
+    """
+    Run the agentic loop: send message to claude, process tool calls, return response.
+
+    Args:
+        user_message: Users input query
+
+    Returns:
+        Claudes's final response as a string
+    """
+    messages = [{"role": "user", "content": user_message}]
+
+    for iteration in range(MAX_ITERATIONS):
+        console.print(f"\n[dim]--- Iteration {iteration + 1} ---[/dim]")
+
+        # Call Claude API
+        response = client.messages.create(
+            model=MODEL_NAME, max_tokens=4096, tools=TOOLS, messages=messages
+        )
+
+        # TODO This is for Debugging, Can remove later
+        console.print(f"[dim]Stop reason: {response.stop_reason}[/dim]")
+
+        # Check is Claude needs a tool
+        if response.stop_reason == "tool_use":
+            assistant_message = {"role": "assistant", "content": response.content}
+            messages.append(assistant_message)
+
+            tool_results = []
+
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_name = block.name
+                    tool_input = block.input
+
+                    console.print(
+                        f"[yellow] Calling tool: {tool_name}({json.dumps(tool_input, indent=2)})[/yellow]"
+                    )
+
+                    result = process_tool_call(tool_name, tool_input)
+
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": json.dumps(
+                                {
+                                    "success": result.success,
+                                    "data": result.data,
+                                    "error": result.error,
+                                }
+                            ),
+                        }
+                    )
+
+            messages.append({"role": "user", "content": tool_results})
+
+            # Continue the loop to get Claudes next response
+        elif response.stop_reason == "end_turn":
+            # Claude finished the loop and provided a response
+            final_response = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    final_response += block.text
+
+            return final_response
+
+        else:
+            return f"Unexpected stop reason: {response.stop_reason}"
+
+    return "Maximum iterations reached. Please try again with a more specific query"

@@ -147,7 +147,7 @@ def get_current_weather(location: str, units: str = "metric") -> ToolResult:
 
 def get_weather_forecast(location: str, units: str = "metric") -> ToolResult:
     """
-    Fetch 5-day weather forcast a location using OpenWeatherMap API.
+    Fetch 5-day weather forecast a location using OpenWeatherMap API.
 
     Args:
         location (str): City name.
@@ -159,7 +159,7 @@ def get_weather_forecast(location: str, units: str = "metric") -> ToolResult:
     try:
         location = location.strip()
 
-        console.print(f"[cyan] Fetching forcast for {location}...[/cyan]")
+        console.print(f"[cyan] Fetching forecast for {location}...[/cyan]")
         url = f"{WEATHER_API_URL}/forecast"
         params = {"q": location, "appid": WEATHER_API_KEY, "units": units}
 
@@ -266,7 +266,7 @@ TOOL_MAP = {
 def process_tool_call(tool_name: str, tool_input: dict) -> ToolResult:
     """Execute a tool and return the result"""
     if tool_name not in TOOL_MAP:
-        return ToolResult(sucess=False, error=f"Unkown tool: {tool_name}")
+        return ToolResult(success=False, error=f"Unknown tool: {tool_name}")
 
     tool_func = TOOL_MAP[tool_name]
     return tool_func(**tool_input)
@@ -385,7 +385,7 @@ def main():
     while True:
         try:
             console.print("\n[bold cyan]You:[/bold cyan]", end=" ")
-            user_input = input.strip()
+            user_input = input().strip()
 
             if user_input.lower() in ["quit", "exit", "bye", "goodbye"]:
                 console.print(
